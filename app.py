@@ -71,7 +71,7 @@ def local_css():
         border-bottom-right-radius: 2px;
     }
     .agent-bubble {
-        background-color: #2b2b2b; /* Light Grey */
+        background-color: #f0f2f6; /* Light Grey */
         color: #31333F;
         margin-right: auto; /* Pushes to left */
         border-bottom-left-radius: 2px;
