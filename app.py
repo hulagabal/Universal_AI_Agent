@@ -98,5 +98,4 @@ if file_data:
             except Exception as e:
                 st.error(f"Error: {e}")
 else:
-    st.warning("Upload a supported file before you can chat. \n " \
-    "Supported formats: PDF, Image (JPG/PNG), Word (.docx), Text (.txt).")
+    st.warning("To get started, please upload a document in PDF, Image, Word, or Text format. Once your file is attached, you can begin chatting with the AI about its contents.")
