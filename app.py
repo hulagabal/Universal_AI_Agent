@@ -65,13 +65,13 @@ def local_css():
         line-height: 1.5;
     }
     .user-bubble {
-        background-color: #007AFF; /* Blue */
+        background-color: #6200ee; /* Blue */
         color: white;
         margin-left: auto; /* Pushes to right */
         border-bottom-right-radius: 2px;
     }
     .agent-bubble {
-        background-color: #f0f2f6; /* Light Grey */
+        background-color: #2b2b2b; /* Light Grey */
         color: #31333F;
         margin-right: auto; /* Pushes to left */
         border-bottom-left-radius: 2px;
