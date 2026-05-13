@@ -63,7 +63,7 @@ while True:
 
     try:
         completion = client.chat.completions.create(
-            model="Llama-3.2-11b-vision-preview",
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=messages
         )
 

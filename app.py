@@ -67,33 +67,35 @@ with st.sidebar:
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ask about your file..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"): st.markdown(prompt)
+if file_data:
+    if prompt := st.chat_input("Ask about your file..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
 
-    # Building the AI request
-    context_text = ""
-    image_payload = None
+        # Building the AI request
+        context_text = ""
+        image_payload = None
 
-    if file_data:
         if file_data["type"] == "text":
             context_text = f"File Content: {file_data['content']}\n\n"
         else:
             image_payload = file_data["content"]
 
-    # Constructing the message payload for Llama 4 Scout
-    user_content = [{"type": "text", "text": f"{context_text}User Question: {prompt}"}]
-    if image_payload:
-        user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
+        # Constructing the message payload for Llama 4 Scout
+        user_content = [{"type": "text", "text": f"{context_text}User Question: {prompt}"}]
+        if image_payload:
+            user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
 
-    with st.chat_message("assistant"):
-        try:
-            response = client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
-                messages=[{"role": "user", "content": user_content}]
-            )
-            reply = response.choices[0].message.content
-            st.markdown(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-        except Exception as e:
-            st.error(f"Error: {e}")
+        with st.chat_message("assistant"):
+            try:
+                response = client.chat.completions.create(
+                    model="meta-llama/llama-4-scout-17b-16e-instruct",
+                    messages=[{"role": "user", "content": user_content}]
+                )
+                reply = response.choices[0].message.content
+                st.markdown(reply)
+                st.session_state.messages.append({"role": "assistant", "content": reply})
+            except Exception as e:
+                st.error(f"Error: {e}")
+else:
+    st.warning("Upload a supported file before you can chat.")
