@@ -7,6 +7,46 @@ from dotenv import load_dotenv
 import pandas as pd
 import io
 
+import streamlit as st
+
+# --- PASTE THIS EXACTLY AS IS ---
+st.markdown("""
+<style>
+    /* This targets the container for each chat message */
+    [data-testid="stChatMessage"] {
+        border-radius: 20px;
+        padding: 15px;
+        margin-bottom: 10px;
+        width: fit-content;
+        max-width: 85%;
+    }
+
+    /* Style for the Assistant/Agent */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+        background-color: #f0f2f6; /* Soft Grey */
+        border-bottom-left-radius: 2px;
+    }
+
+    /* Style for the User */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        background-color: #007AFF; /* Modern Blue */
+        color: white;
+        margin-left: auto; /* Pushes user bubble to the right */
+        border-bottom-right-radius: 2px;
+    }
+
+    /* Fix text color for user messages so markdown is readable */
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {
+        color: white;
+    }
+    
+    /* Hide the default avatar icons if you want a super clean look (Optional) */
+    /* [data-testid="stChatMessageAvatarUser"], [data-testid="stChatMessageAvatarAssistant"] {
+        display: none;
+    } */
+</style>
+""", unsafe_allow_html=True)
+
 load_dotenv()
 
 st.set_page_config(page_title="Universal AI Agent", page_icon="📎")
