@@ -10,6 +10,36 @@ import io
 load_dotenv()
 
 st.set_page_config(page_title="Universal AI Agent", page_icon="📎")
+import streamlit as st
+
+# --- STEP 1: DEFINE STYLES ---
+def local_css():
+    st.markdown("""
+    <style>
+    .chat-bubble {
+        padding: 12px 16px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+        max-width: 80%;
+        font-family: sans-serif;
+        line-height: 1.5;
+    }
+    .user-bubble {
+        background-color: #007AFF; /* Blue */
+        color: white;
+        margin-left: auto; /* Pushes to right */
+        border-bottom-right-radius: 2px;
+    }
+    .agent-bubble {
+        background-color: #f0f2f6; /* Light Grey */
+        color: #31333F;
+        margin-right: auto; /* Pushes to left */
+        border-bottom-left-radius: 2px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+local_css()
 st.title("📎 Universal AI Agent")
 
 client = OpenAI(
@@ -41,12 +71,14 @@ def process_file(uploaded_file):
     elif name.endswith('.txt'):
         return {"type": "text", "content": uploaded_file.read().decode('utf-8')}
     
-    elif uploaded_file.name.endswith('.csv'):
+    # 5. Handle CSV and Excel (Tabular Data)
+    elif name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
         # Convert the first few rows to a string for the AI to analyze
         return df.to_string(index=False)
     
-    elif uploaded_file.name.endswith('.xlsx'):
+    #6. Handle Excel files
+    elif name.endswith('.xlsx'):
         df = pd.read_excel(uploaded_file)
         return df.to_string(index=False)
     
@@ -59,8 +91,8 @@ if "messages" not in st.session_state:
 # --- SIDEBAR: SINGLE UPLOAD SECTION ---
 with st.sidebar:
     st.header("Attachments")
-    uploaded_file = st.file_uploader("Upload any file (PDF, Image, Word, TXT)", 
-                                     type=["pdf", "jpg", "png", "jpeg", "docx", "txt"])
+    uploaded_file = st.file_uploader("Upload any file (PDF, Image, Word, TXT, CSV, Excel)", 
+                                     type=["pdf", "jpg", "png", "jpeg", "docx", "txt", "csv", "xlsx"])
     
     file_data = None
     if uploaded_file:
@@ -75,8 +107,15 @@ with st.sidebar:
         st.rerun()
 
 # --- CHAT INTERFACE ---
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]): st.markdown(msg["content"])
+# --- STEP 2: USE THE BUBBLES ---
+for message in st.session_state.messages:
+    role = message["role"]
+    content = message["content"]
+    
+    if role == "user":
+        st.markdown(f'<div class="chat-bubble user-bubble">{content}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="chat-bubble agent-bubble">{content}</div>', unsafe_allow_html=True)
 
 if file_data:
     if prompt := st.chat_input("Ask about your file..."):
@@ -109,4 +148,4 @@ if file_data:
             except Exception as e:
                 st.error(f"Error: {e}")
 else:
-    st.warning("To get started, please upload a document in PDF, Image, Word, or Text format. Once your file is attached, you can begin chatting with the AI about its contents.")
+    st.warning("To get started, please upload a document in PDF, Image, Word,Text, CSV or Excel format. Once your file is attached, you can begin chatting with the AI about its contents.")
