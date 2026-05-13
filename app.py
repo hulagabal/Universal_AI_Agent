@@ -6,6 +6,10 @@ from docx import Document # For .docx files
 from dotenv import load_dotenv
 import pandas as pd
 import io
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.units import inch
 
 import streamlit as st
 
@@ -88,6 +92,30 @@ client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY")
 )
 
+# --- PDF GENERATOR ---
+def generate_chat_pdf(messages):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=16,
+        textColor='#000080',
+        spaceAfter=12,
+    )
+    story = [Paragraph("Chat History", title_style), Spacer(1, 0.2*inch)]
+    
+    for msg in messages:
+        role = msg['role'].upper()
+        content = msg['content'][:500]  # Limit content length
+        story.append(Paragraph(f"<b>{role}:</b> {content}", styles['Normal']))
+        story.append(Spacer(1, 0.1*inch))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # --- FILE PROCESSOR ROUTER ---
 def process_file(uploaded_file):
     name = uploaded_file.name.lower()
@@ -143,6 +171,17 @@ with st.sidebar:
             st.image(uploaded_file)
 
     st.divider()
+    
+    # Download Chat History
+    if st.session_state.messages:
+        pdf_data = generate_chat_pdf(st.session_state.messages)
+        st.download_button(
+            label="📥 Download PDF",
+            data=pdf_data,
+            file_name="chat_history.pdf",
+            mime="application/pdf"
+        )
+    
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
