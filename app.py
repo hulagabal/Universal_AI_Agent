@@ -98,4 +98,5 @@ if file_data:
             except Exception as e:
                 st.error(f"Error: {e}")
 else:
-    st.warning("Upload a supported file before you can chat. Supported formats: PDF, Image (JPG/PNG), Word (.docx), Text (.txt).")
+    st.warning("Upload a supported file before you can chat. \n " \
+    "Supported formats: PDF, Image (JPG/PNG), Word (.docx), Text (.txt).")
