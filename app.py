@@ -23,9 +23,10 @@ st.markdown("""
 
     /* Style for the Assistant/Agent */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
-        background-color: #f0f2f6; /* Soft Grey */
-        border-bottom-left-radius: 2px;
-    }
+    background-color: #f0f2f6;
+    border-bottom-left-radius: 2px;
+    line-height: 1.6; /* Adds breathing room between rules */
+}
 
     /* Style for the User */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
