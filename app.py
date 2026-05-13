@@ -4,6 +4,8 @@ import os, json, base64
 from PyPDF2 import PdfReader
 from docx import Document # For .docx files
 from dotenv import load_dotenv
+import pandas as pd
+import io
 
 load_dotenv()
 
@@ -38,6 +40,15 @@ def process_file(uploaded_file):
     # 4. Handle Plain Text
     elif name.endswith('.txt'):
         return {"type": "text", "content": uploaded_file.read().decode('utf-8')}
+    
+    elif uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
+        # Convert the first few rows to a string for the AI to analyze
+        return df.to_string(index=False)
+    
+    elif uploaded_file.name.endswith('.xlsx'):
+        df = pd.read_excel(uploaded_file)
+        return df.to_string(index=False)
     
     return None
 
