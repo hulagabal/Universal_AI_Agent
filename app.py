@@ -11,9 +11,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.units import inch
 
-import streamlit as st
-
-# --- PASTE THIS EXACTLY AS IS ---
 st.markdown("""
 <style>
     /* This targets the container for each chat message */
@@ -59,30 +56,29 @@ import streamlit as st
 
 # --- STEP 1: DEFINE STYLES ---
 def local_css():
-    st.markdown("""
+    import streamlit as st
+
+st.markdown("""
     <style>
-    .chat-bubble {
-        padding: 12px 16px;
-        border-radius: 15px;
-        margin-bottom: 10px;
-        max-width: 80%;
-        font-family: sans-serif;
-        line-height: 1.5;
-    }
-    .user-bubble {
-        background-color: #6200ee; /* Blue */
-        color: white;
-        margin-left: auto; /* Pushes to right */
-        border-bottom-right-radius: 2px;
-    }
-    .agent-bubble {
-        background-color: #f0f2f6; /* Light Grey */
-        color: #31333F;
-        margin-right: auto; /* Pushes to left */
-        border-bottom-left-radius: 2px;
-    }
+        /* 1. Style for USER messages (Blue) */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+            background-color: #0078FF !important;
+            color: white !important;
+            flex-direction: row-reverse; /* Optional: moves user avatar to the right */
+        }
+
+        /* 2. Style for ASSISTANT messages (Gray) */
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+            background-color: #F0F2F6 !important;
+            color: black !important;
+        }
+
+        /* Ensure text inside bubbles inherits the correct color */
+        [data-testid="stChatMessage"] p {
+            color: inherit !important;
+        }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 local_css()
 st.title("📎 Universal AI Agent")
@@ -104,12 +100,36 @@ def generate_chat_pdf(messages):
         textColor='#000080',
         spaceAfter=12,
     )
+    user_style = ParagraphStyle(
+        'UserBubble',
+        parent=styles['Normal'],
+        backColor='#0078FF',
+        textColor='white',
+        borderPadding=(8, 8, 8, 8),
+        leftIndent=120,
+        rightIndent=0,
+        spaceBefore=6,
+        spaceAfter=6,
+    )
+    assistant_style = ParagraphStyle(
+        'AssistantBubble',
+        parent=styles['Normal'],
+        backColor='#F0F2F6',
+        textColor='#1F2937',
+        borderPadding=(8, 8, 8, 8),
+        leftIndent=0,
+        rightIndent=120,
+        spaceBefore=6,
+        spaceAfter=6,
+    )
+
     story = [Paragraph("Chat History", title_style), Spacer(1, 0.2*inch)]
     
     for msg in messages:
         role = msg['role'].upper()
-        content = msg['content'][:500]  # Limit content length
-        story.append(Paragraph(f"<b>{role}:</b> {content}", styles['Normal']))
+        content = msg['content'].replace('\n', '<br/>')[:2000]
+        style = assistant_style if msg['role'] == 'assistant' else user_style
+        story.append(Paragraph(f"<b>{role}:</b> {content}", style))
         story.append(Spacer(1, 0.1*inch))
     
     doc.build(story)
@@ -118,6 +138,12 @@ def generate_chat_pdf(messages):
 
 # --- FILE PROCESSOR ROUTER ---
 def process_file(uploaded_file):
+
+    MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB Limit
+    if uploaded_file.size > MAX_FILE_SIZE:
+        st.error("⚠️ File is too large. Please upload a file under 2MB.")
+        return None
+    
     name = uploaded_file.name.lower()
     
     # 1. Handle Images (Vision)
@@ -144,12 +170,12 @@ def process_file(uploaded_file):
     elif name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
         # Convert the first few rows to a string for the AI to analyze
-        return df.to_string(index=False)
+        return {"type": "text", "content": df.to_string(index=False)}
     
     #6. Handle Excel files
     elif name.endswith('.xlsx'):
         df = pd.read_excel(uploaded_file)
-        return df.to_string(index=False)
+        return {"type": "text", "content": df.to_string(index=False)}
     
     return None
 
@@ -165,10 +191,18 @@ with st.sidebar:
     
     file_data = None
     if uploaded_file:
+        
         file_data = process_file(uploaded_file)
-        st.success(f"Loaded: {uploaded_file.name}")
-        if file_data["type"] == "image":
-            st.image(uploaded_file)
+        if file_data:
+            st.success(f"Loaded: {uploaded_file.name}")
+            if file_data["type"] == "image":
+                # Display image from base64 data instead of file object
+                import base64
+                from PIL import Image
+                image_bytes = base64.b64decode(file_data['content'])
+                st.image(Image.open(io.BytesIO(image_bytes)))
+        else:
+            st.error("Unsupported file type. Please upload PDF, Image, Word, TXT, CSV, or Excel.")
 
     st.divider()
     
@@ -187,15 +221,10 @@ with st.sidebar:
         st.rerun()
 
 # --- CHAT INTERFACE ---
-# --- STEP 2: USE THE BUBBLES ---
 for message in st.session_state.messages:
-    role = message["role"]
-    content = message["content"]
-    
-    if role == "user":
-        st.markdown(f'<div class="chat-bubble user-bubble">{content}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="chat-bubble agent-bubble">{content}</div>', unsafe_allow_html=True)
+    # This 'role' variable determines which CSS style above gets applied
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 if file_data:
     if prompt := st.chat_input("Ask about your file..."):
@@ -207,11 +236,15 @@ if file_data:
         image_payload = None
 
         if file_data["type"] == "text":
-            context_text = f"File Content: {file_data['content']}\n\n"
+            # Limit file content to 8000 characters to avoid context length exceeded error
+            file_content = file_data['content'][:8000]
+            if len(file_data['content']) > 8000:
+                file_content += "\n\n[Content truncated due to length...]"
+            context_text = f"File Content: {file_content}\n\n"
         else:
             image_payload = file_data["content"]
 
-        # Constructing the message payload for Llama 4 Scout
+        # Constructing the message payload
         user_content = [{"type": "text", "text": f"{context_text}User Question: {prompt}"}]
         if image_payload:
             user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
@@ -219,13 +252,22 @@ if file_data:
         with st.chat_message("assistant"):
             try:
                 response = client.chat.completions.create(
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",
-                    messages=[{"role": "user", "content": user_content}]
+                    model="llama-3.1-8b-instant",
+                    messages=[{"role": "user", "content": user_content}],
+                    timeout=60
                 )
                 reply = response.choices[0].message.content
                 st.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
             except Exception as e:
-                st.error(f"Error: {e}")
+                error_msg = str(e)
+                if "context_length_exceeded" in error_msg.lower() or "400" in error_msg:
+                    st.error("File content too large. Try uploading a smaller file or ask a more specific question.")
+                elif "timeout" in error_msg.lower():
+                    st.error("Request timed out. Please check your internet connection or try again later.")
+                elif "api key" in error_msg.lower():
+                    st.error("API key error. Check your GROQ_API_KEY in .env file.")
+                else:
+                    st.error(f"Error: {error_msg}")
 else:
     st.warning("To get started, please upload a document in PDF, Image, Word,Text, CSV or Excel format. Once your file is attached, you can begin chatting with the AI about its contents.")
