@@ -2,7 +2,7 @@ import streamlit as st
 from openai import OpenAI
 import os, json, base64
 from PyPDF2 import PdfReader
-from docx import Document # For .docx files
+from docx import Document
 from dotenv import load_dotenv
 import pandas as pd
 import io
@@ -153,8 +153,12 @@ def process_file(uploaded_file):
     # 2. Handle PDF
     elif name.endswith('.pdf'):
         reader = PdfReader(uploaded_file)
-        text = "".join([p.extract_text() for p in reader.pages if p.extract_text()])
-        return {"type": "text", "content": text}
+        text = ""
+        for page in reader.pages:
+            extracted = page.extract_text()
+            if extracted:
+                text += extracted
+                return {"type": "text", "content": text}
     
     # 3. Handle Word (.docx)
     elif name.endswith('.docx'):
@@ -169,7 +173,6 @@ def process_file(uploaded_file):
     # 5. Handle CSV and Excel (Tabular Data)
     elif name.endswith('.csv'):
         df = pd.read_csv(uploaded_file)
-        # Convert the first few rows to a string for the AI to analyze
         return {"type": "text", "content": df.to_string(index=False)}
     
     #6. Handle Excel files
@@ -186,8 +189,9 @@ if "messages" not in st.session_state:
 # --- SIDEBAR: SINGLE UPLOAD SECTION ---
 with st.sidebar:
     st.header("Attachments")
-    uploaded_file = st.file_uploader("Upload any file (PDF, Image, Word, TXT, CSV, Excel)", 
-                                     type=["pdf", "jpg", "png", "jpeg", "docx", "txt", "csv", "xlsx"])
+    uploaded_file = st.file_uploader("Upload any file (PDF, Image, Word, TXT, CSV, Excel) Max size: 2MB",
+                                     type=["pdf", "jpg", "png", "jpeg", "docx", "txt", "csv", "xlsx"],
+                                       help="Upload a file to chat about its contents. Supported formats: PDF, Image, Word, Text, CSV, Excel. Max size: 2MB.")
     
     file_data = None
     if uploaded_file:
@@ -250,24 +254,27 @@ if file_data:
             user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
 
         with st.chat_message("assistant"):
-            try:
-                response = client.chat.completions.create(
-                    model="llama-3.1-8b-instant",
-                    messages=[{"role": "user", "content": user_content}],
-                    timeout=60
-                )
-                reply = response.choices[0].message.content
-                st.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-            except Exception as e:
-                error_msg = str(e)
-                if "context_length_exceeded" in error_msg.lower() or "400" in error_msg:
-                    st.error("File content too large. Try uploading a smaller file or ask a more specific question.")
-                elif "timeout" in error_msg.lower():
-                    st.error("Request timed out. Please check your internet connection or try again later.")
-                elif "api key" in error_msg.lower():
-                    st.error("API key error. Check your GROQ_API_KEY in .env file.")
-                else:
-                    st.error(f"Error: {error_msg}")
+            with st.spinner("AI is thinking..."):
+
+                try:
+                    response = client.chat.completions.create(
+                        model="meta-llama/llama-4-scout-17b-16e-instruct",
+                        messages=[{"role": "user", "content": user_content}],
+                        timeout=60
+                    )
+                    reply = response.choices[0].message.content
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
+                    
+                except Exception as e:
+                    error_msg = str(e)    
+                    if "context_length_exceeded" in error_msg.lower() or "400" in error_msg:
+                        st.error("File content too large. Try uploading a smaller file or ask a more specific question.")
+                    elif "timeout" in error_msg.lower():
+                        st.error("Request timed out. Please check your internet connection or try again later.")
+                    elif "api key" in error_msg.lower():
+                        st.error("API key error.")
+                    else:
+                        st.error(f"Unexpected error: {e}")
 else:
-    st.warning("To get started, please upload a document in PDF, Image, Word,Text, CSV or Excel format. Once your file is attached, you can begin chatting with the AI about its contents.")
+    st.warning("To get started, please upload a document in PDF, Image, Word,Text, CSV or Excel format. Once your file is attached, you can begin chatting with the AI about its contents. Max size: 2MB")
