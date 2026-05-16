@@ -172,7 +172,7 @@ def process_file(uploaded_file):
     
     # 5. Handle CSV and Excel (Tabular Data)
     elif name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, encoding='latin1')
         return {"type": "text", "content": df.to_string(index=False)}
     
     #6. Handle Excel files
