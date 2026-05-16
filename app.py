@@ -158,7 +158,7 @@ def process_file(uploaded_file):
             extracted = page.extract_text()
             if extracted:
                 text += extracted
-                return {"type": "text", "content": text}
+        return {"type": "text", "content": text}
     
     # 3. Handle Word (.docx)
     elif name.endswith('.docx'):
@@ -182,9 +182,74 @@ def process_file(uploaded_file):
     
     return None
 
+# --- GENERATE 3 QUESTIONS ABOUT UPLOADED FILE ---
+def generate_file_questions(file_data, filename):
+    """Generate 3 insightful questions about the uploaded file."""
+    default_questions = [
+        "What is the main topic of this document?",
+        "What are the key points or findings?",
+        "What actions or recommendations are suggested?"
+    ]
+    
+    if file_data["type"] != "text":
+        return default_questions
+    
+    file_text = file_data["content"][:3000]
+    prompt = (
+        f"Based on this document ('{filename}'), generate exactly 3 different questions "
+        "a user might ask. Return ONLY the questions, one per line, without numbering or dashes."
+        f"\n\nDocument:\n{file_text}"
+    )
+    
+    try:
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": prompt}],
+            timeout=15
+        )
+        result = response.choices[0].message.content.strip()
+        questions = [q.strip() for q in result.split("\n") if q.strip()]
+        return questions[:3] if len(questions) >= 3 else default_questions
+    except Exception:
+        return default_questions
+
+# --- ANSWER QUERY ABOUT FILE ---
+def answer_file_question(question, file_data):
+    """Answer a question about the uploaded file."""
+    context_text = ""
+    image_payload = None
+    
+    if file_data["type"] == "text":
+        file_content = file_data['content'][:8000]
+        if len(file_data['content']) > 8000:
+            file_content += "\n[Content truncated...]"
+        context_text = f"File: {file_content}\n\n"
+    else:
+        image_payload = file_data["content"]
+    
+    user_content = [{"type": "text", "text": f"{context_text}Question: {question}"}]
+    if image_payload:
+        user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
+    
+    try:
+        response = client.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[{"role": "user", "content": user_content}],
+            timeout=60
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        raise e
+
 # --- INITIALIZATION ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "uploaded_filename" not in st.session_state:
+    st.session_state.uploaded_filename = None
+if "generated_questions" not in st.session_state:
+    st.session_state.generated_questions = None
+if "questions_asked" not in st.session_state:
+    st.session_state.questions_asked = False
 
 # --- SIDEBAR: SINGLE UPLOAD SECTION ---
 with st.sidebar:
@@ -222,59 +287,49 @@ with st.sidebar:
     
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
+        st.session_state.uploaded_filename = None
+        st.session_state.generated_questions = None
+        st.session_state.questions_asked = False
         st.rerun()
 
 # --- CHAT INTERFACE ---
+if file_data:
+    # Check if a new file was uploaded
+    if st.session_state.uploaded_filename != uploaded_file.name:
+        st.session_state.uploaded_filename = uploaded_file.name
+        st.session_state.generated_questions = None
+        st.session_state.questions_asked = False
+    
+    # Generate questions on first view of new file
+    if st.session_state.generated_questions is None:
+        st.session_state.generated_questions = generate_file_questions(file_data, uploaded_file.name)
+    
+    # Add intro message with questions if not already added
+    if not st.session_state.questions_asked:
+        questions_text = "\n".join([f"{i+1}. {q}" for i, q in enumerate(st.session_state.generated_questions)])
+        intro_msg = f"I've loaded your file. Here are 3 questions you can ask about it:\n\n{questions_text}"
+        st.session_state.messages.append({"role": "assistant", "content": intro_msg})
+        st.session_state.questions_asked = True
+    
+    # Custom question input
+    if prompt := st.chat_input("Ask your own question about the file..."):
+        try:
+            reply = answer_file_question(prompt, file_data)
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            st.rerun()
+        except Exception as e:
+            error_msg = str(e)
+            if "context_length_exceeded" in error_msg.lower() or "400" in error_msg:
+                st.error("File too large. Try a smaller file or more specific question.")
+            elif "timeout" in error_msg.lower():
+                st.error("Request timed out. Please try again.")
+            else:
+                st.error(f"Error: {error_msg[:100]}")
+else:
+    st.warning("Upload a file (PDF, Image, Word, TXT, CSV, Excel) to get started. Max size: 2MB")
+
+# Display chat history
 for message in st.session_state.messages:
-    # This 'role' variable determines which CSS style above gets applied
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-
-if file_data:
-    if prompt := st.chat_input("Ask about your file..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-
-        # Building the AI request
-        context_text = ""
-        image_payload = None
-
-        if file_data["type"] == "text":
-            # Limit file content to 8000 characters to avoid context length exceeded error
-            file_content = file_data['content'][:8000]
-            if len(file_data['content']) > 8000:
-                file_content += "\n\n[Content truncated due to length...]"
-            context_text = f"File Content: {file_content}\n\n"
-        else:
-            image_payload = file_data["content"]
-
-        # Constructing the message payload
-        user_content = [{"type": "text", "text": f"{context_text}User Question: {prompt}"}]
-        if image_payload:
-            user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_payload}"}})
-
-        with st.chat_message("assistant"):
-            with st.spinner("AI is thinking..."):
-
-                try:
-                    response = client.chat.completions.create(
-                        model="meta-llama/llama-4-scout-17b-16e-instruct",
-                        messages=[{"role": "user", "content": user_content}],
-                        timeout=60
-                    )
-                    reply = response.choices[0].message.content
-                    st.markdown(reply)
-                    st.session_state.messages.append({"role": "assistant", "content": reply})
-                    
-                except Exception as e:
-                    error_msg = str(e)    
-                    if "context_length_exceeded" in error_msg.lower() or "400" in error_msg:
-                        st.error("File content too large. Try uploading a smaller file or ask a more specific question.")
-                    elif "timeout" in error_msg.lower():
-                        st.error("Request timed out. Please check your internet connection or try again later.")
-                    elif "api key" in error_msg.lower():
-                        st.error("API key error.")
-                    else:
-                        st.error(f"Unexpected error: {e}")
-else:
-    st.warning("To get started, please upload a document in PDF, Image, Word,Text, CSV or Excel format. Once your file is attached, you can begin chatting with the AI about its contents. Max size: 2MB")
